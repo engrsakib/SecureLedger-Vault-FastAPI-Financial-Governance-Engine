@@ -1,4 +1,5 @@
-from typing import Annotated
+from datetime import date as DateType
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
@@ -12,14 +13,71 @@ from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.schemas.envelope import ApiSuccessResponse
 from app.schemas.transaction import (
+    SortOrder,
     TransactionCreate,
     TransactionFilterRequest,
+    TransactionListMeta,
+    TransactionListQuery,
     TransactionResponse,
+    TransactionSortField,
     TransactionUpdate,
 )
 from app.schemas.user import MessageResponse
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
+
+
+def _list_query_params(
+    page: Annotated[int, Query(ge=1, description="Page number (1-based)")] = 1,
+    page_size: Annotated[
+        int, Query(ge=1, le=100, description="Number of items per page")
+    ] = 20,
+    search: Annotated[
+        str | None,
+        Query(description="Search in title and category (case-insensitive)"),
+    ] = None,
+    type: Annotated[
+        Literal["income", "expense"] | None,
+        Query(description="Filter by type: income or expense"),
+    ] = None,
+    category: Annotated[str | None, Query(description="Filter by category")] = None,
+    minimum_amount: Annotated[
+        float | None, Query(description="Minimum amount (inclusive)")
+    ] = None,
+    maximum_amount: Annotated[
+        float | None, Query(description="Maximum amount (inclusive)")
+    ] = None,
+    date_from: Annotated[
+        DateType | None, Query(description="Transactions on or after this date")
+    ] = None,
+    date_to: Annotated[
+        DateType | None, Query(description="Transactions on or before this date")
+    ] = None,
+    sort_by: Annotated[
+        TransactionSortField, Query(description="Field to sort by")
+    ] = "date",
+    sort_order: Annotated[SortOrder, Query(description="Sort direction")] = "desc",
+) -> TransactionListQuery:
+    return TransactionListQuery(
+        page=page,
+        page_size=page_size,
+        search=search,
+        type=type,
+        category=category,
+        minimum_amount=minimum_amount,
+        maximum_amount=maximum_amount,
+        date_from=date_from,
+        date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+
+
+def _filters_from_query(query: TransactionListQuery) -> dict:
+    return query.model_dump(
+        exclude_none=True,
+        exclude={"page", "page_size", "sort_by", "sort_order"},
+    )
 
 
 @router.post(
@@ -51,23 +109,45 @@ def create_transaction(
 
 @router.get(
     "",
-    summary="List all transactions",
+    summary="List transactions with pagination, search, sort, and filters",
     response_model=ApiSuccessResponse[list[TransactionResponse]],
     responses=error_responses(*PROTECTED_ERRORS),
 )
 def get_transactions(
     request: Request,
+    query: Annotated[TransactionListQuery, Depends(_list_query_params)],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    transactions = transaction_crud.get_transactions_by_owner(
-        db, owner_id=current_user.id
+    transactions, total_items = transaction_crud.list_transactions(
+        db,
+        owner_id=current_user.id,
+        page=query.page,
+        page_size=query.page_size,
+        search=query.search,
+        type=query.type,
+        category=query.category,
+        minimum_amount=query.minimum_amount,
+        maximum_amount=query.maximum_amount,
+        date_from=query.date_from,
+        date_to=query.date_to,
+        sort_by=query.sort_by,
+        sort_order=query.sort_order,
     )
     data = [TransactionResponse.model_validate(item) for item in transactions]
+    meta = TransactionListMeta.build(
+        page=query.page,
+        page_size=query.page_size,
+        total_items=total_items,
+        sort_by=query.sort_by,
+        sort_order=query.sort_order,
+        filters=_filters_from_query(query),
+    )
     return success_result(
         request,
         data=data,
         message="Transactions retrieved successfully",
+        meta=meta.model_dump(),
         links=transaction_links(request),
     )
 

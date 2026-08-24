@@ -74,7 +74,11 @@ class TestGetTransactions:
         response = client.get("/transactions", headers=auth_headers)
 
         assert response.status_code == 200
-        assert get_success_data(response) == []
+        body = response.json()
+        assert body["data"] == []
+        assert body["meta"]["total_items"] == 0
+        assert body["meta"]["page"] == 1
+        assert body["meta"]["page_size"] == 20
 
     def test_get_all_transactions_returns_user_records(
         self, client, auth_headers, sample_transaction
@@ -101,6 +105,77 @@ class TestGetTransactions:
     def test_get_transactions_requires_authentication(self, client):
         response = client.get("/transactions")
         assert response.status_code == 401
+
+    def test_get_transactions_pagination(self, client, auth_headers):
+        for index in range(5):
+            create_transaction(
+                client,
+                auth_headers,
+                {
+                    **EXPENSE_PAYLOAD,
+                    "title": f"Expense {index}",
+                    "amount": float(index + 1) * 10,
+                },
+            )
+
+        response = client.get(
+            "/transactions",
+            params={"page": 2, "page_size": 2, "sort_by": "amount", "sort_order": "asc"},
+            headers=auth_headers,
+        )
+        body = response.json()
+
+        assert response.status_code == 200
+        assert len(body["data"]) == 2
+        assert body["meta"]["page"] == 2
+        assert body["meta"]["page_size"] == 2
+        assert body["meta"]["total_items"] == 5
+        assert body["meta"]["total_pages"] == 3
+        assert body["meta"]["has_next"] is True
+        assert body["meta"]["has_previous"] is True
+        assert body["data"][0]["amount"] == 30.0
+
+    def test_get_transactions_search(self, client, auth_headers):
+        create_transaction(client, auth_headers, EXPENSE_PAYLOAD)
+        create_transaction(client, auth_headers, INCOME_PAYLOAD)
+
+        data = get_success_data(
+            client.get("/transactions", params={"search": "salary"}, headers=auth_headers)
+        )
+
+        assert len(data) == 1
+        assert data[0]["title"] == INCOME_PAYLOAD["title"]
+
+    def test_get_transactions_filter_and_sort(self, client, auth_headers):
+        create_transaction(client, auth_headers, EXPENSE_PAYLOAD)
+        create_transaction(client, auth_headers, INCOME_PAYLOAD)
+        create_transaction(
+            client,
+            auth_headers,
+            {
+                **EXPENSE_PAYLOAD,
+                "title": "Restaurant",
+                "category": "Dining",
+                "amount": 300.0,
+            },
+        )
+
+        data = get_success_data(
+            client.get(
+                "/transactions",
+                params={
+                    "type": "expense",
+                    "minimum_amount": 100,
+                    "sort_by": "amount",
+                    "sort_order": "desc",
+                },
+                headers=auth_headers,
+            )
+        )
+
+        assert len(data) == 2
+        assert data[0]["title"] == "Restaurant"
+        assert data[1]["title"] == EXPENSE_PAYLOAD["title"]
 
 
 class TestGetTransactionById:

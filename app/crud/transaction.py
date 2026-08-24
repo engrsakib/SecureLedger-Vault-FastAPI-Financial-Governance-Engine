@@ -1,7 +1,22 @@
-from sqlalchemy.orm import Session
+from sqlalchemy import asc, desc, func, or_
+from sqlalchemy.orm import Query, Session
 
 from app.models.transaction import Transaction
-from app.schemas.transaction import TransactionCreate, TransactionUpdate
+from app.schemas.transaction import (
+    SortOrder,
+    TransactionCreate,
+    TransactionSortField,
+    TransactionUpdate,
+)
+
+SORT_COLUMNS: dict[TransactionSortField, object] = {
+    "id": Transaction.id,
+    "title": Transaction.title,
+    "amount": Transaction.amount,
+    "date": Transaction.date,
+    "type": Transaction.type,
+    "category": Transaction.category,
+}
 
 
 def create_transaction(
@@ -22,7 +37,8 @@ def create_transaction(
 
 
 def get_transactions_by_owner(db: Session, owner_id: int) -> list[Transaction]:
-    return db.query(Transaction).filter(Transaction.owner_id == owner_id).all()
+    items, _ = list_transactions(db, owner_id=owner_id, page=1, page_size=10_000)
+    return items
 
 
 def get_transaction(
@@ -51,16 +67,25 @@ def delete_transaction(db: Session, transaction: Transaction) -> None:
     db.commit()
 
 
-def filter_transactions(
-    db: Session,
-    owner_id: int,
+def _apply_transaction_filters(
+    query: Query,
+    *,
+    search: str | None = None,
     type: str | None = None,
     category: str | None = None,
     minimum_amount: float | None = None,
     maximum_amount: float | None = None,
-) -> list[Transaction]:
-    query = db.query(Transaction).filter(Transaction.owner_id == owner_id)
-
+    date_from=None,
+    date_to=None,
+) -> Query:
+    if search:
+        term = f"%{search.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Transaction.title).like(term),
+                func.lower(Transaction.category).like(term),
+            )
+        )
     if type is not None:
         query = query.filter(Transaction.type == type)
     if category is not None:
@@ -69,5 +94,67 @@ def filter_transactions(
         query = query.filter(Transaction.amount >= minimum_amount)
     if maximum_amount is not None:
         query = query.filter(Transaction.amount <= maximum_amount)
+    if date_from is not None:
+        query = query.filter(Transaction.date >= date_from)
+    if date_to is not None:
+        query = query.filter(Transaction.date <= date_to)
+    return query
 
-    return query.all()
+
+def list_transactions(
+    db: Session,
+    owner_id: int,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    search: str | None = None,
+    type: str | None = None,
+    category: str | None = None,
+    minimum_amount: float | None = None,
+    maximum_amount: float | None = None,
+    date_from=None,
+    date_to=None,
+    sort_by: TransactionSortField = "date",
+    sort_order: SortOrder = "desc",
+) -> tuple[list[Transaction], int]:
+    query = db.query(Transaction).filter(Transaction.owner_id == owner_id)
+    query = _apply_transaction_filters(
+        query,
+        search=search,
+        type=type,
+        category=category,
+        minimum_amount=minimum_amount,
+        maximum_amount=maximum_amount,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    sort_column = SORT_COLUMNS[sort_by]
+    ordering = asc(sort_column) if sort_order == "asc" else desc(sort_column)
+    query = query.order_by(ordering, Transaction.id.desc())
+
+    total_items = query.count()
+    offset = (page - 1) * page_size
+    items = query.offset(offset).limit(page_size).all()
+    return items, total_items
+
+
+def filter_transactions(
+    db: Session,
+    owner_id: int,
+    type: str | None = None,
+    category: str | None = None,
+    minimum_amount: float | None = None,
+    maximum_amount: float | None = None,
+) -> list[Transaction]:
+    items, _ = list_transactions(
+        db,
+        owner_id=owner_id,
+        page=1,
+        page_size=10_000,
+        type=type,
+        category=category,
+        minimum_amount=minimum_amount,
+        maximum_amount=maximum_amount,
+    )
+    return items

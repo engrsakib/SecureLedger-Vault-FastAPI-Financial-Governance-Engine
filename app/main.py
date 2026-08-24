@@ -13,6 +13,7 @@ from app.core.openapi_responses import (
     PUBLIC_ERRORS,
     error_responses,
     merge_openapi_error_responses,
+    patch_openapi_envelope_schemas,
 )
 from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_client import ping_redis
@@ -96,6 +97,7 @@ def custom_openapi():
                 "description": "Production server",
             }
         )
+    patch_openapi_envelope_schemas(openapi_schema)
     protected_paths = ("/transactions",)
     for path, path_item in openapi_schema["paths"].items():
         for method, operation in path_item.items():
