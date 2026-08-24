@@ -58,12 +58,7 @@ def client(db: Session) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture
-def device_headers() -> dict[str, str]:
-    return {"X-Device-ID": TEST_DEVICE_ID}
-
-
-@pytest.fixture
-def auth_headers(client: TestClient, device_headers: dict[str, str]) -> dict[str, str]:
+def auth_headers(client: TestClient) -> dict[str, str]:
     client.post(
         "/auth/register",
         json={
@@ -71,15 +66,17 @@ def auth_headers(client: TestClient, device_headers: dict[str, str]) -> dict[str
             "email": "test@example.com",
             "password": "testpassword123",
         },
-        headers=device_headers,
     )
     response = client.post(
         "/auth/login",
-        data={"username": "testuser", "password": "testpassword123"},
-        headers=device_headers,
+        json={
+            "username": "testuser",
+            "password": "testpassword123",
+            "device_id": TEST_DEVICE_ID,
+        },
     )
     token = response.json()["access_token"]
-    return {**device_headers, "Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture

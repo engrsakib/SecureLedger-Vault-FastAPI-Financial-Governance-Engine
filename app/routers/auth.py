@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import enforce_rate_limit
@@ -14,17 +14,18 @@ from app.core.security import (
 from app.core.token_store import get_session, revoke_session, rotate_session_tokens
 from app.crud import user as user_crud
 from app.database.session import get_db
-from app.dependencies.auth import get_current_user, oauth2_scheme, resolve_device_id
+from app.dependencies.auth import get_current_user, http_bearer
 from app.models.user import User
 from app.schemas.user import (
     MessageResponse,
     RefreshTokenRequest,
     Token,
     UserCreate,
+    UserLogin,
     UserResponse,
 )
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 def _build_token_response(session: dict) -> Token:
@@ -58,7 +59,13 @@ def _issue_session_tokens(username: str, device_id: str) -> Token:
     )
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register a new user",
+    description="Create a new account. Password is hashed before storage.",
+)
 def register(
     request: Request,
     user_in: UserCreate,
@@ -78,16 +85,22 @@ def register(
     return user_crud.create_user(db, user_in)
 
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token,
+    summary="Login and get JWT tokens",
+    description="Authenticate with JSON body. Same device_id reuses the existing token session.",
+)
 def login(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    device_id: str = Depends(resolve_device_id),
+    credentials: UserLogin,
     db: Session = Depends(get_db),
 ):
     enforce_rate_limit(request)
-    user = user_crud.get_user_by_username(db, username=form_data.username)
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    device_id = credentials.device_id or str(uuid.uuid4())
+
+    user = user_crud.get_user_by_username(db, username=credentials.username)
+    if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -101,7 +114,12 @@ def login(
     return _issue_session_tokens(user.username, device_id)
 
 
-@router.post("/refresh", response_model=Token)
+@router.post(
+    "/refresh",
+    response_model=Token,
+    summary="Refresh access token",
+    description="Exchange a valid refresh token for a new access and refresh token pair.",
+)
 def refresh_token(request: Request, body: RefreshTokenRequest):
     enforce_rate_limit(request)
     token_data = decode_refresh_token(body.refresh_token)
@@ -145,14 +163,19 @@ def refresh_token(request: Request, body: RefreshTokenRequest):
     )
 
 
-@router.post("/logout", response_model=MessageResponse)
+@router.post(
+    "/logout",
+    response_model=MessageResponse,
+    summary="Logout and revoke session",
+    description="Invalidate the current device session and revoke all tokens.",
+)
 def logout(
     request: Request,
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(http_bearer),
     current_user: User = Depends(get_current_user),
 ):
     enforce_rate_limit(request)
-    token_data = decode_access_token(token)
+    token_data = decode_access_token(credentials.credentials)
     if token_data.device_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

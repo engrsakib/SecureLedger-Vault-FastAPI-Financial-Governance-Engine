@@ -1,8 +1,7 @@
 TEST_DEVICE_ID = "test-device-auth-001"
 
 
-def test_register_and_login(client, device_headers):
-    headers = {**device_headers, "X-Device-ID": TEST_DEVICE_ID}
+def test_register_and_login(client):
     register_response = client.post(
         "/auth/register",
         json={
@@ -10,7 +9,6 @@ def test_register_and_login(client, device_headers):
             "email": "newuser@example.com",
             "password": "securepassword123",
         },
-        headers=headers,
     )
     assert register_response.status_code == 201
     data = register_response.json()
@@ -21,8 +19,11 @@ def test_register_and_login(client, device_headers):
 
     login_response = client.post(
         "/auth/login",
-        data={"username": "newuser", "password": "securepassword123"},
-        headers=headers,
+        json={
+            "username": "newuser",
+            "password": "securepassword123",
+            "device_id": TEST_DEVICE_ID,
+        },
     )
     assert login_response.status_code == 200
     token_data = login_response.json()
@@ -33,8 +34,7 @@ def test_register_and_login(client, device_headers):
     assert token_data["device_id"] == TEST_DEVICE_ID
 
 
-def test_same_device_returns_same_token(client, device_headers):
-    headers = {**device_headers, "X-Device-ID": "shared-device-123"}
+def test_same_device_returns_same_token(client):
     client.post(
         "/auth/register",
         json={
@@ -42,19 +42,15 @@ def test_same_device_returns_same_token(client, device_headers):
             "email": "device@example.com",
             "password": "securepassword123",
         },
-        headers=headers,
     )
 
-    first_login = client.post(
-        "/auth/login",
-        data={"username": "deviceuser", "password": "securepassword123"},
-        headers=headers,
-    )
-    second_login = client.post(
-        "/auth/login",
-        data={"username": "deviceuser", "password": "securepassword123"},
-        headers=headers,
-    )
+    login_payload = {
+        "username": "deviceuser",
+        "password": "securepassword123",
+        "device_id": "shared-device-123",
+    }
+    first_login = client.post("/auth/login", json=login_payload)
+    second_login = client.post("/auth/login", json=login_payload)
 
     assert first_login.status_code == 200
     assert second_login.status_code == 200
@@ -65,8 +61,7 @@ def test_same_device_returns_same_token(client, device_headers):
     assert first["session_id"] == second["session_id"]
 
 
-def test_refresh_token(client, device_headers):
-    headers = {**device_headers, "X-Device-ID": "refresh-device-456"}
+def test_refresh_token(client):
     client.post(
         "/auth/register",
         json={
@@ -74,19 +69,20 @@ def test_refresh_token(client, device_headers):
             "email": "refresh@example.com",
             "password": "securepassword123",
         },
-        headers=headers,
     )
     login_response = client.post(
         "/auth/login",
-        data={"username": "refreshuser", "password": "securepassword123"},
-        headers=headers,
+        json={
+            "username": "refreshuser",
+            "password": "securepassword123",
+            "device_id": "refresh-device-456",
+        },
     )
     refresh_token = login_response.json()["refresh_token"]
 
     refresh_response = client.post(
         "/auth/refresh",
         json={"refresh_token": refresh_token},
-        headers=headers,
     )
     assert refresh_response.status_code == 200
     data = refresh_response.json()
@@ -95,8 +91,7 @@ def test_refresh_token(client, device_headers):
     assert data["device_id"] == "refresh-device-456"
 
 
-def test_logout_revokes_token(client, device_headers):
-    headers = {**device_headers, "X-Device-ID": "logout-device-789"}
+def test_logout_revokes_token(client):
     client.post(
         "/auth/register",
         json={
@@ -104,18 +99,17 @@ def test_logout_revokes_token(client, device_headers):
             "email": "logout@example.com",
             "password": "securepassword123",
         },
-        headers=headers,
     )
     login_response = client.post(
         "/auth/login",
-        data={"username": "logoutuser", "password": "securepassword123"},
-        headers=headers,
+        json={
+            "username": "logoutuser",
+            "password": "securepassword123",
+            "device_id": "logout-device-789",
+        },
     )
     tokens = login_response.json()
-    auth_headers = {
-        **headers,
-        "Authorization": f"Bearer {tokens['access_token']}",
-    }
+    auth_headers = {"Authorization": f"Bearer {tokens['access_token']}"}
 
     logout_response = client.post("/auth/logout", headers=auth_headers)
     assert logout_response.status_code == 200

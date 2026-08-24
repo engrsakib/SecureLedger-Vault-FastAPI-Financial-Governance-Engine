@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 from app.core.rate_limit import enforce_rate_limit
@@ -19,11 +20,53 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Personal Expense Tracker API",
-    description="Track income and expenses with JWT authentication, Redis sessions, and rate limiting",
-    version="1.1.0",
+    title="SecureLedger Vault — Expense Tracker API",
+    description=(
+        "Personal Expense Tracker API with JWT authentication, Redis sessions, "
+        "and rate limiting. All write endpoints accept **application/json**."
+    ),
+    version="1.2.0",
     lifespan=lifespan,
+    swagger_ui_parameters={
+        "defaultModelsExpandDepth": 2,
+        "defaultModelExpandDepth": 2,
+        "displayRequestDuration": True,
+        "docExpansion": "list",
+        "filter": True,
+        "syntaxHighlight.theme": "monokai",
+    },
 )
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Paste the access_token from POST /auth/login",
+        }
+    }
+    for path_item in openapi_schema["paths"].values():
+        for operation in path_item.values():
+            if isinstance(operation, dict) and operation.get("security") is None:
+                if any(tag in operation.get("tags", []) for tag in ("Transactions",)):
+                    operation["security"] = [{"BearerAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 app.include_router(auth.router)
 app.include_router(transactions.router)
@@ -41,7 +84,7 @@ async def global_rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-@app.get("/health")
+@app.get("/health", tags=["Health"], summary="Health check")
 def health_check():
     return {
         "status": "ok",

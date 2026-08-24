@@ -78,7 +78,11 @@ def test_cannot_access_other_users_transaction(client, auth_headers, sample_tran
     )
     other_login = client.post(
         "/auth/login",
-        data={"username": "otheruser", "password": "otherpassword123"},
+        json={
+            "username": "otheruser",
+            "password": "otherpassword123",
+            "device_id": "other-device-001",
+        },
     )
     other_headers = {
         "Authorization": f"Bearer {other_login.json()['access_token']}"
