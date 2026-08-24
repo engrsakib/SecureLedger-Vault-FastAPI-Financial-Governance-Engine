@@ -1,163 +1,478 @@
-# SecureLedger Vault — Personal Expense Tracker API
+<div align="center">
 
-A production-ready FastAPI application for tracking personal income and expenses. Users register, authenticate with JWT, and manage their own transactions with full CRUD and filtering support.
+# SecureLedger Vault
+
+### Personal Expense Tracker API
+
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white)](https://www.sqlalchemy.org/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![JWT](https://img.shields.io/badge/JWT-Auth-black?style=for-the-badge&logo=jsonwebtokens)](https://jwt.io/)
+[![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+
+**A production-ready, fully dockerized FastAPI backend for tracking personal income and expenses with JWT authentication, ownership enforcement, and advanced filtering.**
+
+[Features](#-features) ·
+[Tech Stack](#-tech-stack) ·
+[Project Structure](#-project-structure) ·
+[Docker Setup](#-docker-setup) ·
+[API Reference](#-api-reference) ·
+[Testing](#-testing) ·
+[License](#-license)
+
+---
+
+</div>
+
+## Overview
+
+**SecureLedger Vault** is a modular Personal Expense Tracker API built with FastAPI and PostgreSQL (Supabase). Users can register, authenticate via JWT, and manage their own income and expense records with full CRUD operations, query-based filtering, and strict data isolation — each user can only access their own transactions.
+
+Designed for real-world deployment with Docker Compose, environment-based configuration, and a comprehensive pytest suite.
+
+---
 
 ## Features
 
-- User registration and JWT-based login
-- Password hashing with Passlib/Bcrypt
-- Transaction CRUD (create, read, update, delete)
-- Ownership enforcement — users can only access their own transactions
-- Filter transactions by type, category, and amount range
-- PostgreSQL persistence via SQLAlchemy ORM (Supabase)
-- Fully dockerized — runs on port 4000
+| Category | Capability |
+|----------|------------|
+| **Authentication** | User registration, JWT login, bcrypt password hashing |
+| **Authorization** | Per-user ownership — users can only read/write their own data |
+| **Transactions** | Full CRUD — create, list, get by ID, update, delete |
+| **Filtering** | Query by `type`, `category`, `minimum_amount`, `maximum_amount` |
+| **Validation** | Pydantic v2 schemas with strict field validation |
+| **Database** | SQLAlchemy ORM with PostgreSQL (Supabase remote) |
+| **DevOps** | Dockerized — single command launch on port `4000` |
+| **Testing** | 8 pytest cases covering auth, CRUD, ownership, and filters |
+| **Docs** | Auto-generated Swagger UI at `/docs` |
+
+---
+
+## Tech Stack
+
+<div align="center">
+
+| | Technology | Role |
+|:---:|:---|:---|
+| <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/fastapi/fastapi-original.svg" width="32" alt="FastAPI"/> | **FastAPI** | High-performance async web framework |
+| <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="32" alt="Python"/> | **Python 3.11+** | Core runtime |
+| <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg" width="32" alt="PostgreSQL"/> | **PostgreSQL** | Relational database (via Supabase) |
+| <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/sqlalchemy/sqlalchemy-original.svg" width="32" alt="SQLAlchemy"/> | **SQLAlchemy** | ORM and database abstraction |
+| <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg" width="32" alt="Docker"/> | **Docker** | Containerization and deployment |
+| | **Pydantic v2** | Request/response data validation |
+| | **python-jose** | JWT token creation and verification |
+| | **Passlib + Bcrypt** | Secure password hashing |
+| | **Uvicorn** | ASGI production server |
+| | **Pytest + httpx** | Automated API testing |
+
+</div>
+
+---
 
 ## Project Structure
 
 ```
-app/
-  core/           # Settings and security (JWT, password hashing)
-  database/       # SQLAlchemy engine, session, base
-  models/         # User and Transaction ORM models
-  schemas/        # Pydantic v2 request/response models
-  crud/           # Database operations
-  dependencies/   # Auth dependencies (get_current_user)
-  routers/        # API route handlers
-  main.py         # FastAPI application entry point
-tests/            # Pytest test suite
-plan/             # Architecture notes (gitignored)
+SecureLedger-Vault-FastAPI-Financial-Governance-Engine/
+│
+├── app/                              # Application source code
+│   ├── __init__.py
+│   ├── main.py                       # FastAPI app entry point, lifespan, routers
+│   │
+│   ├── core/                         # Core configuration and security
+│   │   ├── __init__.py
+│   │   ├── config.py                 # pydantic-settings (DATABASE_URL, JWT secrets)
+│   │   └── security.py               # Password hashing, JWT encode/decode
+│   │
+│   ├── database/                     # Database engine and session management
+│   │   ├── __init__.py
+│   │   ├── base.py                   # SQLAlchemy declarative Base
+│   │   └── session.py                # Engine, SessionLocal, get_db dependency
+│   │
+│   ├── models/                       # SQLAlchemy ORM models
+│   │   ├── __init__.py
+│   │   ├── user.py                   # User table (id, username, email, hashed_password)
+│   │   └── transaction.py            # Transaction table (title, amount, type, category, date, owner_id)
+│   │
+│   ├── schemas/                      # Pydantic v2 request/response schemas
+│   │   ├── __init__.py
+│   │   ├── user.py                   # UserCreate, UserResponse, Token, TokenData
+│   │   └── transaction.py            # TransactionCreate, Update, Response, MessageResponse
+│   │
+│   ├── crud/                         # Database CRUD operations
+│   │   ├── __init__.py
+│   │   ├── user.py                   # get_user_by_username, create_user, etc.
+│   │   └── transaction.py            # create, get, update, delete, filter
+│   │
+│   ├── dependencies/                 # FastAPI dependency injection
+│   │   ├── __init__.py
+│   │   └── auth.py                   # OAuth2PasswordBearer, get_current_user
+│   │
+│   └── routers/                      # API route handlers
+│       ├── __init__.py
+│       ├── auth.py                   # POST /auth/register, POST /auth/login
+│       └── transactions.py           # CRUD + GET /transactions/filter
+│
+├── tests/                            # Pytest test suite
+│   ├── __init__.py
+│   ├── conftest.py                   # Fixtures: client, db, auth_headers
+│   ├── test_auth.py                  # Register + login tests
+│   └── test_transactions.py          # CRUD, ownership, filter tests
+│
+├── plan/                             # Architecture notes (gitignored)
+│   └── ARCHITECTURE.md
+│
+├── .env.example                      # Environment variable template
+├── .gitignore                        # Git ignore rules
+├── docker-compose.yml                # Docker Compose service definition
+├── Dockerfile                        # Multi-stage-ready container build
+├── LICENSE                           # MIT License
+├── README.md                         # Project documentation
+└── requirements.txt                  # Python dependencies
 ```
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Client["Client / Swagger UI"] -->|"HTTP :4000"| API["FastAPI App"]
+    API --> Auth["Auth Router"]
+    API --> Txn["Transactions Router"]
+    Auth --> Security["JWT + Bcrypt"]
+    Txn --> Deps["get_current_user"]
+    Deps --> Security
+    Auth --> CRUD["CRUD Layer"]
+    Txn --> CRUD
+    CRUD --> ORM["SQLAlchemy Models"]
+    ORM --> DB[("Supabase PostgreSQL")]
+```
+
+**Request flow:** Client authenticates → receives JWT → sends Bearer token on protected routes → FastAPI validates token → CRUD operations scoped to `owner_id`.
+
+---
 
 ## Prerequisites
 
-- [Docker](https://www.docker.com/) and Docker Compose
-- A [Supabase](https://supabase.com) project with PostgreSQL
+Before you begin, ensure the following are installed:
 
-## Supabase Database Setup
+| Tool | Version | Purpose |
+|------|---------|---------|
+| [Docker](https://www.docker.com/get-started/) | Latest | Container runtime |
+| [Docker Compose](https://docs.docker.com/compose/) | v2+ | Multi-container orchestration |
+| [Supabase Account](https://supabase.com) | Free tier works | Remote PostgreSQL database |
+| [Git](https://git-scm.com/) | Latest | Clone the repository |
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. Go to **Project Settings → Database → Connection string**
-3. Copy the **URI** connection string (Session or Transaction pooler mode)
-4. Replace `[YOUR-PASSWORD]` with your database password
-5. If connection fails, append `?sslmode=require` to the URL
+---
 
-## Environment Variables
+## Docker Setup
 
-Copy the example file and fill in your values:
+### Step 1 — Clone the Repository
+
+```bash
+git clone https://github.com/your-username/SecureLedger-Vault-FastAPI-Financial-Governance-Engine.git
+cd SecureLedger-Vault-FastAPI-Financial-Governance-Engine
+```
+
+### Step 2 — Configure Supabase Database
+
+1. Sign in at [supabase.com](https://supabase.com) and create a new project
+2. Navigate to **Project Settings → Database → Connection string**
+3. Select **URI** format (Transaction pooler recommended for serverless)
+4. Copy the connection string and replace `[YOUR-PASSWORD]` with your database password
+5. If SSL errors occur, append `?sslmode=require` to the URL
+
+### Step 3 — Create Environment File
 
 ```bash
 cp .env.example .env
 ```
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Supabase PostgreSQL connection string |
-| `SECRET_KEY` | Random secret for JWT signing |
-| `ALGORITHM` | JWT algorithm (default: `HS256`) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiry in minutes (default: `30`) |
-
-Example `.env`:
+Edit `.env` with your credentials:
 
 ```env
 DATABASE_URL=postgresql://postgres.xxxx:yourpassword@aws-0-us-east-1.pooler.supabase.com:6543/postgres
-SECRET_KEY=your-super-secret-key-change-this
+SECRET_KEY=your-super-secret-key-minimum-32-characters-long
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-## Run with Docker Compose
+| Variable | Required | Description |
+|----------|:--------:|-------------|
+| `DATABASE_URL` | Yes | Supabase PostgreSQL connection URI |
+| `SECRET_KEY` | Yes | Random secret for signing JWT tokens |
+| `ALGORITHM` | No | JWT algorithm (default: `HS256`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Token lifetime in minutes (default: `30`) |
+
+### Step 4 — Build and Run
 
 ```bash
 docker compose up --build
 ```
 
-The API will be available at:
+Expected output:
 
-- **API:** http://localhost:4000
-- **Swagger UI:** http://localhost:4000/docs
-- **Health check:** http://localhost:4000/health
+```
+api-1  | INFO:     Uvicorn running on http://0.0.0.0:4000
+api-1  | INFO:     Application startup complete.
+```
 
-## API Endpoints
+### Step 5 — Verify the Deployment
+
+| Endpoint | URL |
+|----------|-----|
+| Health Check | http://localhost:4000/health |
+| Swagger UI | http://localhost:4000/docs |
+| ReDoc | http://localhost:4000/redoc |
+| OpenAPI JSON | http://localhost:4000/openapi.json |
+
+### Docker Commands Reference
+
+```bash
+# Start in detached (background) mode
+docker compose up --build -d
+
+# View container logs
+docker compose logs -f api
+
+# Stop all services
+docker compose down
+
+# Rebuild after code changes
+docker compose up --build
+
+# Run tests inside the container
+docker compose run --rm api pytest -v
+```
+
+---
+
+## API Reference
 
 ### Authentication
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/register` | Register a new user |
-| POST | `/auth/login` | Login and receive JWT token |
+| Method | Endpoint | Auth | Description |
+|:------:|----------|:----:|-------------|
+| `POST` | `/auth/register` | No | Register a new user account |
+| `POST` | `/auth/login` | No | Login and receive a JWT access token |
 
-### Transactions (JWT required)
+### Transactions
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/transactions` | Create a transaction |
-| GET | `/transactions` | List all user's transactions |
-| GET | `/transactions/filter` | Filter by type, category, amount |
-| GET | `/transactions/{id}` | Get a specific transaction |
-| PUT | `/transactions/{id}` | Update a transaction |
-| DELETE | `/transactions/{id}` | Delete a transaction |
+| Method | Endpoint | Auth | Description |
+|:------:|----------|:----:|-------------|
+| `POST` | `/transactions` | Yes | Create a new transaction |
+| `GET` | `/transactions` | Yes | List all transactions for the current user |
+| `GET` | `/transactions/filter` | Yes | Filter by type, category, amount range |
+| `GET` | `/transactions/{id}` | Yes | Get a specific transaction by ID |
+| `PUT` | `/transactions/{id}` | Yes | Update an existing transaction |
+| `DELETE` | `/transactions/{id}` | Yes | Delete a transaction |
+
+### Filter Query Parameters
+
+| Parameter | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `type` | string | `expense` | Filter by `"income"` or `"expense"` |
+| `category` | string | `Food` | Filter by category name |
+| `minimum_amount` | float | `100` | Minimum transaction amount |
+| `maximum_amount` | float | `5000` | Maximum transaction amount |
+
+---
 
 ## Example Usage
 
-**Register:**
+<details>
+<summary><strong>Register a new user</strong></summary>
 
 ```bash
 curl -X POST http://localhost:4000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username": "john", "email": "john@example.com", "password": "secret123"}'
+  -d '{
+    "username": "john",
+    "email": "john@example.com",
+    "password": "secret123"
+  }'
 ```
 
-**Login:**
+**Response `201 Created`:**
+
+```json
+{
+  "id": 1,
+  "username": "john",
+  "email": "john@example.com"
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Login and obtain JWT token</strong></summary>
 
 ```bash
 curl -X POST http://localhost:4000/auth/login \
   -d "username=john&password=secret123"
 ```
 
-**Create transaction:**
+**Response `200 OK`:**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Create a transaction</strong></summary>
 
 ```bash
 curl -X POST http://localhost:4000/transactions \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"title": "Groceries", "amount": 150, "type": "expense", "category": "Food", "date": "2026-01-15"}'
+  -d '{
+    "title": "Groceries",
+    "amount": 150,
+    "type": "expense",
+    "category": "Food",
+    "date": "2026-01-15"
+  }'
 ```
 
-**Filter transactions:**
+</details>
+
+<details>
+<summary><strong>Filter transactions</strong></summary>
 
 ```bash
-curl "http://localhost:4000/transactions/filter?type=expense&category=Food&minimum_amount=100" \
+curl "http://localhost:4000/transactions/filter?type=expense&category=Food&minimum_amount=100&maximum_amount=5000" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-## Running Tests
+</details>
 
-Tests use an in-memory SQLite database by default (no Supabase required):
+<details>
+<summary><strong>Update a transaction</strong></summary>
+
+```bash
+curl -X PUT http://localhost:4000/transactions/1 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Updated Groceries", "amount": 200}'
+```
+
+</details>
+
+<details>
+<summary><strong>Delete a transaction</strong></summary>
+
+```bash
+curl -X DELETE http://localhost:4000/transactions/1 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response `200 OK`:**
+
+```json
+{
+  "message": "Transaction deleted successfully"
+}
+```
+
+</details>
+
+---
+
+## Testing
+
+The test suite uses an in-memory SQLite database by default — no Supabase connection required.
+
+### Local Testing
 
 ```bash
 pip install -r requirements.txt
-pytest -v
+python -m pytest -v
 ```
 
-Or inside Docker:
+### Docker Testing
 
 ```bash
 docker compose run --rm api pytest -v
 ```
 
-To run tests against a real PostgreSQL database, set `TEST_DATABASE_URL`:
+### Test Coverage
+
+| # | Test Case | File |
+|:-:|-----------|------|
+| 1 | Register + login returns JWT | `test_auth.py` |
+| 2 | Create transaction (authenticated) | `test_transactions.py` |
+| 3 | Get all transactions (own only) | `test_transactions.py` |
+| 4 | Get transaction by ID | `test_transactions.py` |
+| 5 | Update transaction | `test_transactions.py` |
+| 6 | Delete transaction | `test_transactions.py` |
+| 7 | Cannot access another user's transaction (404) | `test_transactions.py` |
+| 8 | Filter by type, category, and amount range | `test_transactions.py` |
+
+To run against a real PostgreSQL instance:
 
 ```bash
-TEST_DATABASE_URL=postgresql://... pytest -v
+TEST_DATABASE_URL=postgresql://user:pass@host:5432/dbname python -m pytest -v
 ```
 
-## Tech Stack
+---
 
-- **FastAPI** — Web framework
-- **SQLAlchemy** — ORM
-- **PostgreSQL (Supabase)** — Database
-- **Pydantic v2** — Data validation
-- **python-jose** — JWT tokens
-- **Passlib + Bcrypt** — Password hashing
-- **Pytest + httpx** — Testing
-- **Docker** — Containerization
+## Database Models
+
+### User
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Primary key |
+| `username` | str | Unique username |
+| `email` | str | Email address |
+| `hashed_password` | str | Bcrypt-hashed password (never returned in API) |
+
+### Transaction
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Primary key |
+| `title` | str | Transaction title |
+| `amount` | float | Positive amount |
+| `type` | str | `"income"` or `"expense"` |
+| `category` | str | Category label |
+| `date` | date | Transaction date |
+| `owner_id` | int | Foreign key → `users.id` |
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for full details.
+
+```
+Copyright (c) 2026 Md. Nazmus Sakib (engrsakib)
+```
+
+---
+
+<div align="center">
+
+### Author
+
+**Md. Nazmus Sakib**
+
+[![GitHub](https://img.shields.io/badge/GitHub-engrsakib-181717?style=for-the-badge&logo=github)](https://github.com/engrsakib)
+[![Website](https://img.shields.io/badge/Website-engrsakib.com-0A66C2?style=for-the-badge&logo=googlechrome&logoColor=white)](https://engrsakib.com)
+
+---
+
+Built with FastAPI · Secured with JWT · Powered by Supabase PostgreSQL
+
+**SecureLedger Vault** © 2026
+
+</div>
