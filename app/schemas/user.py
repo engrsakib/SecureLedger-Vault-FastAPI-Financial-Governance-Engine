@@ -17,8 +17,23 @@ class UserResponse(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
+    session_id: str
+    device_id: str
 
 
 class TokenData(BaseModel):
     username: str | None = None
+    session_id: str | None = None
+    device_id: str | None = None
+    jti: str | None = None
+    token_type: str | None = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class MessageResponse(BaseModel):
+    message: str
