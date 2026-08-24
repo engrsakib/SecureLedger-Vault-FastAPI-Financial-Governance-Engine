@@ -177,6 +177,39 @@ class TestGetTransactions:
         assert data[0]["title"] == "Restaurant"
         assert data[1]["title"] == EXPENSE_PAYLOAD["title"]
 
+    def test_get_transactions_invalid_pagination_returns_422(self, client, auth_headers):
+        response = client.get(
+            "/transactions",
+            params={"page": 0, "page_size": 200},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422
+        assert get_error_body(response)["code"] == "VALIDATION_ERROR"
+
+    def test_get_transactions_date_range_filter(self, client, auth_headers):
+        create_transaction(
+            client,
+            auth_headers,
+            {**EXPENSE_PAYLOAD, "date": "2026-01-10"},
+        )
+        create_transaction(
+            client,
+            auth_headers,
+            {**INCOME_PAYLOAD, "date": "2026-02-01"},
+        )
+
+        data = get_success_data(
+            client.get(
+                "/transactions",
+                params={"date_from": "2026-01-01", "date_to": "2026-01-31"},
+                headers=auth_headers,
+            )
+        )
+
+        assert len(data) == 1
+        assert data[0]["date"] == "2026-01-10"
+
 
 class TestGetTransactionById:
     def test_get_transaction_by_id_success(self, client, auth_headers, sample_transaction):
@@ -303,6 +336,16 @@ class TestUpdateTransaction:
         response = client.put("/transactions/1", json={"title": "No Auth"})
         assert response.status_code == 401
 
+    def test_update_transaction_invalid_amount_returns_422(self, client, auth_headers, sample_transaction):
+        response = client.put(
+            f"/transactions/{sample_transaction['id']}",
+            json={"amount": -10},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422
+        assert get_error_body(response)["code"] == "VALIDATION_ERROR"
+
 
 class TestDeleteTransaction:
     def test_delete_transaction_success(self, client, auth_headers, sample_transaction):
@@ -317,6 +360,16 @@ class TestDeleteTransaction:
 
         get_response = client.get(f"/transactions/{transaction_id}", headers=auth_headers)
         assert get_response.status_code == 404
+
+    def test_delete_transaction_not_found(self, client, auth_headers):
+        response = client.delete("/transactions/99999", headers=auth_headers)
+
+        assert response.status_code == 404
+        assert get_error_body(response)["message"] == "Transaction not found"
+
+    def test_delete_transaction_requires_authentication(self, client):
+        response = client.delete("/transactions/1")
+        assert response.status_code == 401
 
 
 class TestFilterTransactions:
@@ -349,3 +402,11 @@ class TestFilterTransactions:
 
         assert len(data) == 1
         assert data[0]["type"] == "income"
+
+    def test_filter_transactions_query_requires_authentication(self, client):
+        response = client.get("/transactions/filter", params={"type": "expense"})
+        assert response.status_code == 401
+
+    def test_filter_transactions_json_requires_authentication(self, client):
+        response = client.post("/transactions/filter", json={"type": "income"})
+        assert response.status_code == 401
