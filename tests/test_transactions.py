@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from tests.helpers import get_error_body, get_success_data
+
 EXPENSE_PAYLOAD = {
     "title": "Groceries",
     "amount": 150.0,
@@ -24,7 +26,7 @@ def create_transaction(client: TestClient, headers: dict, payload: dict | None =
         headers=headers,
     )
     assert response.status_code == 201
-    return response.json()
+    return get_success_data(response)
 
 
 class TestCreateTransaction:
@@ -32,7 +34,10 @@ class TestCreateTransaction:
         response = client.post("/transactions", json=INCOME_PAYLOAD, headers=auth_headers)
 
         assert response.status_code == 201
-        data = response.json()
+        body = response.json()
+        assert body["success"] is True
+        assert body["links"] is not None
+        data = body["data"]
         assert data["title"] == INCOME_PAYLOAD["title"]
         assert data["amount"] == INCOME_PAYLOAD["amount"]
         assert data["type"] == INCOME_PAYLOAD["type"]
@@ -49,16 +54,19 @@ class TestCreateTransaction:
     def test_create_transaction_requires_authentication(self, client):
         response = client.post("/transactions", json=EXPENSE_PAYLOAD)
         assert response.status_code == 401
+        assert get_error_body(response)["success"] is False
 
     def test_create_transaction_rejects_invalid_amount(self, client, auth_headers):
         invalid_payload = {**EXPENSE_PAYLOAD, "amount": -50.0}
         response = client.post("/transactions", json=invalid_payload, headers=auth_headers)
         assert response.status_code == 422
+        assert get_error_body(response)["code"] == "VALIDATION_ERROR"
 
     def test_create_transaction_rejects_invalid_type(self, client, auth_headers):
         invalid_payload = {**EXPENSE_PAYLOAD, "type": "invalid"}
         response = client.post("/transactions", json=invalid_payload, headers=auth_headers)
         assert response.status_code == 422
+        assert get_error_body(response)["code"] == "VALIDATION_ERROR"
 
 
 class TestGetTransactions:
@@ -66,17 +74,15 @@ class TestGetTransactions:
         response = client.get("/transactions", headers=auth_headers)
 
         assert response.status_code == 200
-        assert response.json() == []
+        assert get_success_data(response) == []
 
     def test_get_all_transactions_returns_user_records(
         self, client, auth_headers, sample_transaction
     ):
         create_transaction(client, auth_headers, INCOME_PAYLOAD)
 
-        response = client.get("/transactions", headers=auth_headers)
+        data = get_success_data(client.get("/transactions", headers=auth_headers))
 
-        assert response.status_code == 200
-        data = response.json()
         assert len(data) == 2
         titles = {item["title"] for item in data}
         assert sample_transaction["title"] in titles
@@ -85,7 +91,7 @@ class TestGetTransactions:
     def test_get_transactions_returns_full_response_shape(self, client, auth_headers):
         create_transaction(client, auth_headers, EXPENSE_PAYLOAD)
 
-        data = client.get("/transactions", headers=auth_headers).json()
+        data = get_success_data(client.get("/transactions", headers=auth_headers))
         record = data[0]
 
         assert set(record.keys()) == {
@@ -101,10 +107,10 @@ class TestGetTransactionById:
     def test_get_transaction_by_id_success(self, client, auth_headers, sample_transaction):
         transaction_id = sample_transaction["id"]
 
-        response = client.get(f"/transactions/{transaction_id}", headers=auth_headers)
+        data = get_success_data(
+            client.get(f"/transactions/{transaction_id}", headers=auth_headers)
+        )
 
-        assert response.status_code == 200
-        data = response.json()
         assert data["id"] == transaction_id
         assert data["title"] == sample_transaction["title"]
         assert data["amount"] == sample_transaction["amount"]
@@ -117,7 +123,7 @@ class TestGetTransactionById:
         response = client.get("/transactions/99999", headers=auth_headers)
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Transaction not found"
+        assert get_error_body(response)["message"] == "Transaction not found"
 
     def test_get_transaction_by_id_requires_authentication(self, client):
         response = client.get("/transactions/1")
@@ -143,7 +149,7 @@ class TestGetTransactionById:
             },
         )
         other_headers = {
-            "Authorization": f"Bearer {other_login.json()['access_token']}"
+            "Authorization": f"Bearer {get_success_data(other_login)['access_token']}"
         }
 
         response = client.get(
@@ -157,14 +163,14 @@ class TestUpdateTransaction:
     def test_update_transaction_partial_fields(self, client, auth_headers, sample_transaction):
         transaction_id = sample_transaction["id"]
 
-        response = client.put(
-            f"/transactions/{transaction_id}",
-            json={"title": "Updated Groceries", "amount": 200.0},
-            headers=auth_headers,
+        data = get_success_data(
+            client.put(
+                f"/transactions/{transaction_id}",
+                json={"title": "Updated Groceries", "amount": 200.0},
+                headers=auth_headers,
+            )
         )
 
-        assert response.status_code == 200
-        data = response.json()
         assert data["id"] == transaction_id
         assert data["title"] == "Updated Groceries"
         assert data["amount"] == 200.0
@@ -179,8 +185,9 @@ class TestUpdateTransaction:
             headers=auth_headers,
         )
 
-        get_response = client.get(f"/transactions/{transaction_id}", headers=auth_headers)
-        data = get_response.json()
+        data = get_success_data(
+            client.get(f"/transactions/{transaction_id}", headers=auth_headers)
+        )
         assert data["title"] == "Persisted Title"
         assert data["category"] == "Shopping"
 
@@ -194,14 +201,14 @@ class TestUpdateTransaction:
             "date": "2026-02-01",
         }
 
-        response = client.put(
-            f"/transactions/{transaction_id}",
-            json=updated,
-            headers=auth_headers,
+        data = get_success_data(
+            client.put(
+                f"/transactions/{transaction_id}",
+                json=updated,
+                headers=auth_headers,
+            )
         )
 
-        assert response.status_code == 200
-        data = response.json()
         assert data["title"] == updated["title"]
         assert data["amount"] == updated["amount"]
         assert data["type"] == updated["type"]
@@ -215,7 +222,7 @@ class TestUpdateTransaction:
             headers=auth_headers,
         )
         assert response.status_code == 404
-        assert response.json()["detail"] == "Transaction not found"
+        assert get_error_body(response)["message"] == "Transaction not found"
 
     def test_update_transaction_requires_authentication(self, client):
         response = client.put("/transactions/1", json={"title": "No Auth"})
@@ -229,7 +236,9 @@ class TestDeleteTransaction:
         response = client.delete(f"/transactions/{transaction_id}", headers=auth_headers)
 
         assert response.status_code == 200
-        assert response.json()["message"] == "Transaction deleted successfully"
+        body = response.json()
+        assert body["success"] is True
+        assert body["data"]["message"] == "Transaction deleted successfully"
 
         get_response = client.get(f"/transactions/{transaction_id}", headers=auth_headers)
         assert get_response.status_code == 404
@@ -240,14 +249,14 @@ class TestFilterTransactions:
         create_transaction(client, auth_headers, EXPENSE_PAYLOAD)
         create_transaction(client, auth_headers, INCOME_PAYLOAD)
 
-        response = client.get(
-            "/transactions/filter",
-            params={"type": "expense", "category": "Food", "minimum_amount": 100},
-            headers=auth_headers,
+        data = get_success_data(
+            client.get(
+                "/transactions/filter",
+                params={"type": "expense", "category": "Food", "minimum_amount": 100},
+                headers=auth_headers,
+            )
         )
 
-        assert response.status_code == 200
-        data = response.json()
         assert len(data) == 1
         assert data[0]["title"] == EXPENSE_PAYLOAD["title"]
 
@@ -255,13 +264,13 @@ class TestFilterTransactions:
         create_transaction(client, auth_headers, EXPENSE_PAYLOAD)
         create_transaction(client, auth_headers, INCOME_PAYLOAD)
 
-        response = client.post(
-            "/transactions/filter",
-            json={"type": "income", "minimum_amount": 1000},
-            headers=auth_headers,
+        data = get_success_data(
+            client.post(
+                "/transactions/filter",
+                json={"type": "income", "minimum_amount": 1000},
+                headers=auth_headers,
+            )
         )
 
-        assert response.status_code == 200
-        data = response.json()
         assert len(data) == 1
         assert data[0]["type"] == "income"

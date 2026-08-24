@@ -15,13 +15,13 @@ class WelcomeResponse(BaseModel):
                 "project": "SecureLedger Vault",
                 "version": "1.2.0",
                 "documentation": {
-                    "swagger_ui": "http://localhost:4000/docs",
-                    "redoc": "http://localhost:4000/redoc",
-                    "openapi_json": "http://localhost:4000/openapi.json",
+                    "swagger_ui": "https://your-domain.com/docs",
+                    "redoc": "https://your-domain.com/redoc",
+                    "openapi_json": "https://your-domain.com/openapi.json",
                 },
                 "system": {
-                    "health": "http://localhost:4000/health",
-                    "root": "http://localhost:4000/",
+                    "health": "https://your-domain.com/health",
+                    "root": "https://your-domain.com/",
                 },
                 "developer": {
                     "name": "Md. Nazmus Sakib",

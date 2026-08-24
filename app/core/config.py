@@ -55,6 +55,23 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW_SECONDS: int = 60
     DB_CONNECT_RETRIES: int = 5
     DB_CONNECT_RETRY_DELAY_SECONDS: int = 3
+    PUBLIC_BASE_URL: str = ""
+    CORS_ALLOW_ORIGINS: str = ""
+
+    @property
+    def cors_origins(self) -> list[str]:
+        origins: list[str] = []
+        if self.CORS_ALLOW_ORIGINS.strip():
+            origins.extend(
+                origin.strip()
+                for origin in self.CORS_ALLOW_ORIGINS.split(",")
+                if origin.strip()
+            )
+        if self.PUBLIC_BASE_URL.strip():
+            public_origin = self.PUBLIC_BASE_URL.rstrip("/")
+            if public_origin not in origins:
+                origins.append(public_origin)
+        return origins
 
     @field_validator("REFRESH_TOKEN_EXPIRE_MINUTES", mode="before")
     @classmethod

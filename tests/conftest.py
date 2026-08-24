@@ -57,6 +57,9 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
+from tests.helpers import get_success_data
+
+
 @pytest.fixture
 def auth_headers(client: TestClient) -> dict[str, str]:
     client.post(
@@ -75,7 +78,7 @@ def auth_headers(client: TestClient) -> dict[str, str]:
             "device_id": TEST_DEVICE_ID,
         },
     )
-    token = response.json()["access_token"]
+    token = get_success_data(response)["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -92,4 +95,4 @@ def sample_transaction(client: TestClient, auth_headers: dict[str, str]) -> dict
         },
         headers=auth_headers,
     )
-    return response.json()
+    return get_success_data(response)

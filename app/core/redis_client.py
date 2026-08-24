@@ -1,6 +1,3 @@
-import json
-from typing import Any
-
 import redis
 
 from app.core.config import settings
@@ -25,3 +22,7 @@ def ping_redis() -> bool:
         return get_redis().ping()
     except redis.RedisError:
         return False
+
+
+def redis_available() -> bool:
+    return ping_redis()

@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
+from app.core.links import auth_links
 from app.core.rate_limit import enforce_rate_limit
+from app.core.response import success_response
 from app.core.security import (
     create_token_pair,
     decode_access_token,
@@ -12,33 +14,27 @@ from app.core.security import (
     verify_password,
 )
 from app.core.token_store import get_session, revoke_session, rotate_session_tokens
+from app.core.url import get_public_base_url
 from app.crud import user as user_crud
 from app.database.session import get_db
 from app.dependencies.auth import get_current_user, http_bearer
 from app.models.user import User
-from app.schemas.user import (
-    MessageResponse,
-    RefreshTokenRequest,
-    Token,
-    UserCreate,
-    UserLogin,
-    UserResponse,
-)
+from app.schemas.user import RefreshTokenRequest, UserCreate, UserLogin, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def _build_token_response(session: dict) -> Token:
-    return Token(
-        access_token=session["access_token"],
-        refresh_token=session["refresh_token"],
-        token_type="bearer",
-        session_id=session["session_id"],
-        device_id=session["device_id"],
-    )
+def _build_token_data(session: dict) -> dict:
+    return {
+        "access_token": session["access_token"],
+        "refresh_token": session["refresh_token"],
+        "token_type": "bearer",
+        "session_id": session["session_id"],
+        "device_id": session["device_id"],
+    }
 
 
-def _issue_session_tokens(username: str, device_id: str) -> Token:
+def _issue_session_tokens(username: str, device_id: str) -> dict:
     session_id = str(uuid.uuid4())
     tokens = create_token_pair(session_id, device_id, username)
     rotate_session_tokens(
@@ -50,27 +46,17 @@ def _issue_session_tokens(username: str, device_id: str) -> Token:
         access_jti=tokens["access_jti"],
         refresh_jti=tokens["refresh_jti"],
     )
-    return Token(
-        access_token=tokens["access_token"],
-        refresh_token=tokens["refresh_token"],
-        token_type="bearer",
-        session_id=session_id,
-        device_id=device_id,
-    )
+    return {
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
+        "token_type": "bearer",
+        "session_id": session_id,
+        "device_id": device_id,
+    }
 
 
-@router.post(
-    "/register",
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Register a new user",
-    description="Create a new account. Password is hashed before storage.",
-)
-def register(
-    request: Request,
-    user_in: UserCreate,
-    db: Session = Depends(get_db),
-):
+@router.post("/register", status_code=status.HTTP_201_CREATED, summary="Register a new user")
+def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     if user_crud.get_user_by_username(db, username=user_in.username):
         raise HTTPException(
@@ -82,20 +68,20 @@ def register(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
-    return user_crud.create_user(db, user_in)
+    user = user_crud.create_user(db, user_in)
+    links = auth_links(request)
+    return success_response(
+        request,
+        data=UserResponse.model_validate(user),
+        message="User registered successfully",
+        status_code=status.HTTP_201_CREATED,
+        links=links,
+        next_step={"action": "login", "url": links["login"]},
+    )
 
 
-@router.post(
-    "/login",
-    response_model=Token,
-    summary="Login and get JWT tokens",
-    description="Authenticate with JSON body. Same device_id reuses the existing token session.",
-)
-def login(
-    request: Request,
-    credentials: UserLogin,
-    db: Session = Depends(get_db),
-):
+@router.post("/login", summary="Login and get JWT tokens")
+def login(request: Request, credentials: UserLogin, db: Session = Depends(get_db)):
     enforce_rate_limit(request)
     device_id = credentials.device_id or str(uuid.uuid4())
 
@@ -108,18 +94,23 @@ def login(
         )
 
     existing_session = get_session(user.username, device_id)
-    if existing_session:
-        return _build_token_response(existing_session)
+    token_data = (
+        _build_token_data(existing_session)
+        if existing_session
+        else _issue_session_tokens(user.username, device_id)
+    )
+    links = auth_links(request)
+    return success_response(
+        request,
+        data=token_data,
+        message="Login successful",
+        status_code=status.HTTP_200_OK,
+        links=links,
+        next_step={"action": "list_transactions", "url": f"{get_public_base_url(request)}/transactions"},
+    )
 
-    return _issue_session_tokens(user.username, device_id)
 
-
-@router.post(
-    "/refresh",
-    response_model=Token,
-    summary="Refresh access token",
-    description="Exchange a valid refresh token for a new access and refresh token pair.",
-)
+@router.post("/refresh", summary="Refresh access token")
 def refresh_token(request: Request, body: RefreshTokenRequest):
     enforce_rate_limit(request)
     token_data = decode_refresh_token(body.refresh_token)
@@ -154,21 +145,21 @@ def refresh_token(request: Request, body: RefreshTokenRequest):
         access_jti=tokens["access_jti"],
         refresh_jti=tokens["refresh_jti"],
     )
-    return Token(
-        access_token=tokens["access_token"],
-        refresh_token=tokens["refresh_token"],
-        token_type="bearer",
-        session_id=token_data.session_id,
-        device_id=token_data.device_id,
+    return success_response(
+        request,
+        data={
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "token_type": "bearer",
+            "session_id": token_data.session_id,
+            "device_id": token_data.device_id,
+        },
+        message="Token refreshed successfully",
+        links=auth_links(request),
     )
 
 
-@router.post(
-    "/logout",
-    response_model=MessageResponse,
-    summary="Logout and revoke session",
-    description="Invalidate the current device session and revoke all tokens.",
-)
+@router.post("/logout", summary="Logout and revoke session")
 def logout(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(http_bearer),
@@ -182,4 +173,11 @@ def logout(
             detail="Invalid token",
         )
     revoke_session(current_user.username, token_data.device_id)
-    return MessageResponse(message="Logged out successfully")
+    links = auth_links(request)
+    return success_response(
+        request,
+        data={"message": "Logged out successfully"},
+        message="Logged out successfully",
+        links=links,
+        next_step={"action": "login", "url": links["login"]},
+    )
