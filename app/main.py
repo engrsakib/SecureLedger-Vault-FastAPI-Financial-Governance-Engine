@@ -6,9 +6,10 @@ from fastapi.responses import JSONResponse
 
 from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_client import ping_redis
+import app.models.transaction
+import app.models.user
 from app.database.base import Base
 from app.database.session import engine, wait_for_database
-from app.models import transaction, user  # noqa: F401
 from app.routers import auth, transactions
 from app.schemas.root import DeveloperInfo, WelcomeResponse
 

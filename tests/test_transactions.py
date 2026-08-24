@@ -1,19 +1,4 @@
-"""
-Transaction endpoint tests — unit & integration coverage.
-
-Required (Module 24 — 10 marks):
-  1. Get transaction test       — list all transactions
-  2. Get specific transaction   — fetch by ID
-  3. Create transaction test    — POST new transaction
-  4. Update transaction test    — PUT existing transaction
-"""
-
-import pytest
 from fastapi.testclient import TestClient
-
-# ---------------------------------------------------------------------------
-# Shared payloads
-# ---------------------------------------------------------------------------
 
 EXPENSE_PAYLOAD = {
     "title": "Groceries",
@@ -33,7 +18,6 @@ INCOME_PAYLOAD = {
 
 
 def create_transaction(client: TestClient, headers: dict, payload: dict | None = None) -> dict:
-    """Helper: create a transaction and return the response JSON."""
     response = client.post(
         "/transactions",
         json=payload or EXPENSE_PAYLOAD,
@@ -43,14 +27,7 @@ def create_transaction(client: TestClient, headers: dict, payload: dict | None =
     return response.json()
 
 
-# =============================================================================
-# 1. CREATE TRANSACTION TESTS
-# =============================================================================
-
-
 class TestCreateTransaction:
-    """POST /transactions — create a new income or expense record."""
-
     def test_create_transaction_success(self, client, auth_headers):
         response = client.post("/transactions", json=INCOME_PAYLOAD, headers=auth_headers)
 
@@ -84,14 +61,7 @@ class TestCreateTransaction:
         assert response.status_code == 422
 
 
-# =============================================================================
-# 2. GET ALL TRANSACTIONS TESTS
-# =============================================================================
-
-
 class TestGetTransactions:
-    """GET /transactions — retrieve the list of transactions for the current user."""
-
     def test_get_transactions_empty_list(self, client, auth_headers):
         response = client.get("/transactions", headers=auth_headers)
 
@@ -127,14 +97,7 @@ class TestGetTransactions:
         assert response.status_code == 401
 
 
-# =============================================================================
-# 3. GET SPECIFIC TRANSACTION TESTS
-# =============================================================================
-
-
 class TestGetTransactionById:
-    """GET /transactions/{transaction_id} — fetch a single transaction by ID."""
-
     def test_get_transaction_by_id_success(self, client, auth_headers, sample_transaction):
         transaction_id = sample_transaction["id"]
 
@@ -190,14 +153,7 @@ class TestGetTransactionById:
         assert response.status_code == 404
 
 
-# =============================================================================
-# 4. UPDATE TRANSACTION TESTS
-# =============================================================================
-
-
 class TestUpdateTransaction:
-    """PUT /transactions/{transaction_id} — update an existing transaction."""
-
     def test_update_transaction_partial_fields(self, client, auth_headers, sample_transaction):
         transaction_id = sample_transaction["id"]
 
@@ -266,14 +222,7 @@ class TestUpdateTransaction:
         assert response.status_code == 401
 
 
-# =============================================================================
-# BONUS — DELETE & FILTER (beyond the 10-mark minimum)
-# =============================================================================
-
-
 class TestDeleteTransaction:
-    """DELETE /transactions/{transaction_id} — remove a transaction."""
-
     def test_delete_transaction_success(self, client, auth_headers, sample_transaction):
         transaction_id = sample_transaction["id"]
 
@@ -287,8 +236,6 @@ class TestDeleteTransaction:
 
 
 class TestFilterTransactions:
-    """GET/POST /transactions/filter — filter by type, category, and amount."""
-
     def test_filter_transactions_by_query_params(self, client, auth_headers):
         create_transaction(client, auth_headers, EXPENSE_PAYLOAD)
         create_transaction(client, auth_headers, INCOME_PAYLOAD)
