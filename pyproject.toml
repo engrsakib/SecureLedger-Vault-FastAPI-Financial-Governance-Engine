@@ -1,0 +1,13 @@
+[project]
+name = "secureledger-vault"
+version = "1.2.0"
+description = "SecureLedger Vault — FastAPI Expense Tracker API"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:DeprecationWarning",
+]
