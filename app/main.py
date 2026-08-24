@@ -6,13 +6,14 @@ from fastapi.responses import JSONResponse
 from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_client import ping_redis
 from app.database.base import Base
-from app.database.session import engine
+from app.database.session import engine, wait_for_database
 from app.models import transaction, user  # noqa: F401
 from app.routers import auth, transactions
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    wait_for_database()
     Base.metadata.create_all(bind=engine)
     yield
 
