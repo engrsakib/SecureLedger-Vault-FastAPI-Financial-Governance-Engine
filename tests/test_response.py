@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from starlette.requests import Request
 
 from app.core.response import (
+    ERROR_FIELD_ORDER,
+    SUCCESS_FIELD_ORDER,
     base_meta,
     error,
     error_response,
@@ -38,6 +40,7 @@ def test_base_meta_preserves_request_id():
 def test_success_defaults():
     body = success()
 
+    assert list(body.keys()) == list(SUCCESS_FIELD_ORDER)
     assert body["success"] is True
     assert body["status_code"] == 200
     assert body["message"] == "Success"
@@ -73,6 +76,7 @@ def test_success_with_custom_fields():
 def test_error_defaults():
     body = error()
 
+    assert list(body.keys()) == list(ERROR_FIELD_ORDER)
     assert body["success"] is False
     assert body["status_code"] == 500
     assert body["message"] == "Something went wrong"
@@ -143,6 +147,7 @@ def test_error_response_wraps_envelope():
 
     assert response.status_code == 403
     body = json.loads(response.body)
+    assert list(body.keys()) == list(ERROR_FIELD_ORDER)
     assert body["success"] is False
     assert body["message"] == "Forbidden"
     assert body["code"] == "FORBIDDEN"

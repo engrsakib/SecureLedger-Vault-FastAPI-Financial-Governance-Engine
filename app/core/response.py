@@ -6,6 +6,31 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+SUCCESS_FIELD_ORDER = (
+    "success",
+    "status_code",
+    "message",
+    "data",
+    "meta",
+    "next_step",
+    "links",
+    "request_id",
+    "timestamp",
+)
+
+ERROR_FIELD_ORDER = (
+    "success",
+    "status_code",
+    "message",
+    "code",
+    "errors",
+    "meta",
+    "next_step",
+    "links",
+    "request_id",
+    "timestamp",
+)
+
 
 def get_request_id(request: Request | None) -> str:
     if request is None:
@@ -20,6 +45,10 @@ def base_meta(request_id: str | None = None) -> dict[str, str]:
     }
 
 
+def _order_fields(payload: dict[str, Any], field_order: tuple[str, ...]) -> dict[str, Any]:
+    return {key: payload[key] for key in field_order}
+
+
 def success(
     *,
     data: Any = None,
@@ -30,16 +59,21 @@ def success(
     links: Any = None,
     request_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
-        "success": True,
-        "status_code": status_code,
-        "message": message,
-        "data": data,
-        "meta": meta,
-        "next_step": next_step,
-        "links": links,
-        **base_meta(request_id),
-    }
+    meta_fields = base_meta(request_id)
+    return _order_fields(
+        {
+            "success": True,
+            "status_code": status_code,
+            "message": message,
+            "data": data,
+            "meta": meta,
+            "next_step": next_step,
+            "links": links,
+            "request_id": meta_fields["request_id"],
+            "timestamp": meta_fields["timestamp"],
+        },
+        SUCCESS_FIELD_ORDER,
+    )
 
 
 def error(
@@ -53,17 +87,22 @@ def error(
     links: Any = None,
     request_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
-        "success": False,
-        "status_code": status_code,
-        "message": message,
-        "code": code,
-        "errors": errors,
-        "meta": meta,
-        "next_step": next_step,
-        "links": links,
-        **base_meta(request_id),
-    }
+    meta_fields = base_meta(request_id)
+    return _order_fields(
+        {
+            "success": False,
+            "status_code": status_code,
+            "message": message,
+            "code": code,
+            "errors": errors,
+            "meta": meta,
+            "next_step": next_step,
+            "links": links,
+            "request_id": meta_fields["request_id"],
+            "timestamp": meta_fields["timestamp"],
+        },
+        ERROR_FIELD_ORDER,
+    )
 
 
 success_body = success

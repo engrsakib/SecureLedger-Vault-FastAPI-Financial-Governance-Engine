@@ -1,6 +1,8 @@
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
+
+from app.core.response import ERROR_FIELD_ORDER, SUCCESS_FIELD_ORDER
 
 T = TypeVar("T")
 
@@ -47,6 +49,10 @@ class ApiSuccessResponse(BaseModel, Generic[T]):
     request_id: str = Field(..., description="Unique request ID (also sent as X-Request-ID)")
     timestamp: str = Field(..., description="ISO-8601 UTC response timestamp")
 
+    @model_serializer
+    def serialize_ordered(self) -> dict[str, Any]:
+        return {key: getattr(self, key) for key in SUCCESS_FIELD_ORDER}
+
 
 class ApiErrorResponse(BaseModel):
     """Unified error envelope returned by handlers and global exception handlers."""
@@ -66,3 +72,7 @@ class ApiErrorResponse(BaseModel):
     links: dict[str, str] | None = Field(None, description="Related resource URLs")
     request_id: str = Field(..., description="Unique request ID (also sent as X-Request-ID)")
     timestamp: str = Field(..., description="ISO-8601 UTC response timestamp")
+
+    @model_serializer
+    def serialize_ordered(self) -> dict[str, Any]:
+        return {key: getattr(self, key) for key in ERROR_FIELD_ORDER}
