@@ -7,9 +7,16 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.config import settings
 from app.core.handlers import register_exception_handlers
+from app.core.openapi_responses import (
+    AUTH_ERRORS,
+    PROTECTED_ERRORS,
+    PUBLIC_ERRORS,
+    error_responses,
+    merge_openapi_error_responses,
+)
 from app.core.rate_limit import enforce_rate_limit
 from app.core.redis_client import ping_redis
-from app.core.response import error_response, success_response
+from app.core.response import error_response, success_result
 from app.core.url import get_public_base_url
 import app.models.transaction
 import app.models.user
@@ -17,7 +24,8 @@ from app.database.base import Base
 from app.database.session import engine, wait_for_database
 from app.middleware.request_context import RequestContextMiddleware
 from app.routers import auth, transactions
-from app.schemas.root import DeveloperInfo
+from app.schemas.envelope import ApiSuccessResponse
+from app.schemas.root import DeveloperInfo, HealthData, WelcomeData
 
 PROJECT_NAME = "SecureLedger Vault"
 API_VERSION = "1.2.0"
@@ -34,7 +42,14 @@ app = FastAPI(
     title="SecureLedger Vault — Expense Tracker API",
     description=(
         "Personal Expense Tracker API with JWT authentication, Redis sessions, "
-        "and rate limiting. All responses use a unified success/error envelope."
+        "and rate limiting.\n\n"
+        "## Response format\n\n"
+        "Every endpoint returns a **unified JSON envelope**:\n\n"
+        "**Success** — `success`, `status_code`, `message`, `data`, `meta`, "
+        "`next_step`, `links`, `request_id`, `timestamp`\n\n"
+        "**Error** — same fields plus `code` and `errors` (`success: false`)\n\n"
+        "Login tokens are in `data.access_token`. Use **Authorize** with "
+        "`Bearer <access_token>` for protected routes."
     ),
     version=API_VERSION,
     lifespan=lifespan,
@@ -90,6 +105,11 @@ def custom_openapi():
                 continue
             if path.startswith(protected_paths) or path.endswith("/logout"):
                 operation["security"] = [{"BearerAuth": []}]
+                merge_openapi_error_responses(operation.setdefault("responses", {}), PROTECTED_ERRORS)
+            elif path.startswith("/auth"):
+                merge_openapi_error_responses(operation.setdefault("responses", {}), AUTH_ERRORS)
+            else:
+                merge_openapi_error_responses(operation.setdefault("responses", {}), PUBLIC_ERRORS)
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -136,29 +156,35 @@ async def global_rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-@app.get("/", tags=["Root"], summary="Welcome & API directory")
+@app.get(
+    "/",
+    tags=["Root"],
+    summary="Welcome & API directory",
+    response_model=ApiSuccessResponse[WelcomeData],
+    responses=error_responses(*PUBLIC_ERRORS),
+)
 def root(request: Request):
     base_url = get_public_base_url(request)
-    return success_response(
+    return success_result(
         request,
-        data={
-            "project": PROJECT_NAME,
-            "version": API_VERSION,
-            "documentation": {
+        data=WelcomeData(
+            project=PROJECT_NAME,
+            version=API_VERSION,
+            documentation={
                 "swagger_ui": f"{base_url}/docs",
                 "redoc": f"{base_url}/redoc",
                 "openapi_json": f"{base_url}/openapi.json",
             },
-            "system": {
+            system={
                 "root": f"{base_url}/",
                 "health": f"{base_url}/health",
             },
-            "developer": DeveloperInfo(
+            developer=DeveloperInfo(
                 name="Md. Nazmus Sakib",
                 username="engrsakib",
                 website="https://engrsakib.com",
-            ).model_dump(),
-        },
+            ),
+        ),
         message=f"Welcome to {PROJECT_NAME} — Personal Expense Tracker API",
         links={
             "docs": f"{base_url}/docs",
@@ -170,13 +196,19 @@ def root(request: Request):
     )
 
 
-@app.get("/health", tags=["Health"], summary="Health check")
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Health check",
+    response_model=ApiSuccessResponse[HealthData],
+    responses=error_responses(*PUBLIC_ERRORS),
+)
 def health_check(request: Request):
-    return success_response(
+    return success_result(
         request,
-        data={
-            "status": "ok",
-            "redis": "connected" if ping_redis() else "disconnected",
-        },
+        data=HealthData(
+            status="ok",
+            redis="connected" if ping_redis() else "disconnected",
+        ),
         message="Service is healthy",
     )

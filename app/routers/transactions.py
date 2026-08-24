@@ -4,22 +4,31 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.links import transaction_links
-from app.core.response import success_response
+from app.core.openapi_responses import PROTECTED_ERRORS, error_responses
+from app.core.response import success_result
 from app.crud import transaction as transaction_crud
 from app.database.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
+from app.schemas.envelope import ApiSuccessResponse
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionFilterRequest,
     TransactionResponse,
     TransactionUpdate,
 )
+from app.schemas.user import MessageResponse
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, summary="Create a transaction")
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a transaction",
+    response_model=ApiSuccessResponse[TransactionResponse],
+    responses=error_responses(*PROTECTED_ERRORS),
+)
 def create_transaction(
     request: Request,
     transaction_in: TransactionCreate,
@@ -30,7 +39,7 @@ def create_transaction(
         db, transaction_in, owner_id=current_user.id
     )
     links = transaction_links(request, transaction.id)
-    return success_response(
+    return success_result(
         request,
         data=TransactionResponse.model_validate(transaction),
         message="Transaction created successfully",
@@ -40,7 +49,12 @@ def create_transaction(
     )
 
 
-@router.get("", summary="List all transactions")
+@router.get(
+    "",
+    summary="List all transactions",
+    response_model=ApiSuccessResponse[list[TransactionResponse]],
+    responses=error_responses(*PROTECTED_ERRORS),
+)
 def get_transactions(
     request: Request,
     db: Session = Depends(get_db),
@@ -50,7 +64,7 @@ def get_transactions(
         db, owner_id=current_user.id
     )
     data = [TransactionResponse.model_validate(item) for item in transactions]
-    return success_response(
+    return success_result(
         request,
         data=data,
         message="Transactions retrieved successfully",
@@ -58,7 +72,12 @@ def get_transactions(
     )
 
 
-@router.post("/filter", summary="Filter transactions (JSON body)")
+@router.post(
+    "/filter",
+    summary="Filter transactions (JSON body)",
+    response_model=ApiSuccessResponse[list[TransactionResponse]],
+    responses=error_responses(*PROTECTED_ERRORS),
+)
 def filter_transactions_json(
     request: Request,
     filters: TransactionFilterRequest,
@@ -74,7 +93,7 @@ def filter_transactions_json(
         maximum_amount=filters.maximum_amount,
     )
     data = [TransactionResponse.model_validate(item) for item in transactions]
-    return success_response(
+    return success_result(
         request,
         data=data,
         message="Filtered transactions retrieved successfully",
@@ -82,7 +101,12 @@ def filter_transactions_json(
     )
 
 
-@router.get("/filter", summary="Filter transactions (query params)")
+@router.get(
+    "/filter",
+    summary="Filter transactions (query params)",
+    response_model=ApiSuccessResponse[list[TransactionResponse]],
+    responses=error_responses(*PROTECTED_ERRORS),
+)
 def filter_transactions_query(
     request: Request,
     type: Annotated[str | None, Query()] = None,
@@ -101,7 +125,7 @@ def filter_transactions_query(
         maximum_amount=maximum_amount,
     )
     data = [TransactionResponse.model_validate(item) for item in transactions]
-    return success_response(
+    return success_result(
         request,
         data=data,
         message="Filtered transactions retrieved successfully",
@@ -109,7 +133,12 @@ def filter_transactions_query(
     )
 
 
-@router.get("/{transaction_id}", summary="Get transaction by ID")
+@router.get(
+    "/{transaction_id}",
+    summary="Get transaction by ID",
+    response_model=ApiSuccessResponse[TransactionResponse],
+    responses=error_responses(*PROTECTED_ERRORS),
+)
 def get_transaction(
     request: Request,
     transaction_id: int,
@@ -125,7 +154,7 @@ def get_transaction(
             detail="Transaction not found",
         )
     links = transaction_links(request, transaction_id)
-    return success_response(
+    return success_result(
         request,
         data=TransactionResponse.model_validate(transaction),
         message="Transaction retrieved successfully",
@@ -133,7 +162,12 @@ def get_transaction(
     )
 
 
-@router.put("/{transaction_id}", summary="Update a transaction")
+@router.put(
+    "/{transaction_id}",
+    summary="Update a transaction",
+    response_model=ApiSuccessResponse[TransactionResponse],
+    responses=error_responses(*PROTECTED_ERRORS),
+)
 def update_transaction(
     request: Request,
     transaction_id: int,
@@ -151,7 +185,7 @@ def update_transaction(
         )
     updated = transaction_crud.update_transaction(db, transaction, transaction_in)
     links = transaction_links(request, transaction_id)
-    return success_response(
+    return success_result(
         request,
         data=TransactionResponse.model_validate(updated),
         message="Transaction updated successfully",
@@ -159,7 +193,12 @@ def update_transaction(
     )
 
 
-@router.delete("/{transaction_id}", summary="Delete a transaction")
+@router.delete(
+    "/{transaction_id}",
+    summary="Delete a transaction",
+    response_model=ApiSuccessResponse[MessageResponse],
+    responses=error_responses(*PROTECTED_ERRORS),
+)
 def delete_transaction(
     request: Request,
     transaction_id: int,
@@ -176,9 +215,9 @@ def delete_transaction(
         )
     transaction_crud.delete_transaction(db, transaction)
     links = transaction_links(request)
-    return success_response(
+    return success_result(
         request,
-        data={"message": "Transaction deleted successfully"},
+        data=MessageResponse(message="Transaction deleted successfully"),
         message="Transaction deleted successfully",
         links=links,
         next_step={"action": "list", "url": links["list"]},

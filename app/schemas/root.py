@@ -7,11 +7,10 @@ class DeveloperInfo(BaseModel):
     website: str = Field(..., description="Developer website URL")
 
 
-class WelcomeResponse(BaseModel):
+class WelcomeData(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "message": "Welcome to SecureLedger Vault — Personal Expense Tracker API",
                 "project": "SecureLedger Vault",
                 "version": "1.2.0",
                 "documentation": {
@@ -32,9 +31,17 @@ class WelcomeResponse(BaseModel):
         }
     )
 
-    message: str
-    project: str
-    version: str
-    documentation: dict[str, str]
-    system: dict[str, str]
-    developer: DeveloperInfo
+    project: str = Field(..., description="API project name")
+    version: str = Field(..., description="API version")
+    documentation: dict[str, str] = Field(..., description="Links to API documentation")
+    system: dict[str, str] = Field(..., description="Core system endpoint URLs")
+    developer: DeveloperInfo = Field(..., description="API developer information")
+
+
+class HealthData(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"status": "ok", "redis": "connected"}}
+    )
+
+    status: str = Field(..., description="Overall service status", examples=["ok"])
+    redis: str = Field(..., description="Redis connectivity", examples=["connected", "disconnected"])
