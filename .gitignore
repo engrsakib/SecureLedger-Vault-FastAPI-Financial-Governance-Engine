@@ -1,0 +1,12 @@
+.cursor
+.cursorrules
+.cursorrules.md
+.cursorrules.txt
+.cursorrules.yml
+.cursorrules.yaml
+plan/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
