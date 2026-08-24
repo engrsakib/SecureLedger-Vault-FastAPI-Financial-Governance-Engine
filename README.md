@@ -46,7 +46,7 @@ Designed for real-world deployment with Docker Compose, environment-based config
 | **Validation** | Pydantic v2 schemas with strict field validation |
 | **Database** | SQLAlchemy ORM with PostgreSQL (Supabase remote) |
 | **DevOps** | Dockerized — single command launch on port `4000` |
-| **Testing** | 8 pytest cases covering auth, CRUD, ownership, and filters |
+| **Testing** | 25 pytest cases covering auth, CRUD, ownership, and filters |
 | **Docs** | Auto-generated Swagger UI at `/docs` |
 
 ---
@@ -389,39 +389,112 @@ curl -X DELETE http://localhost:4000/transactions/1 \
 
 ## Testing
 
-The test suite uses an in-memory SQLite database by default — no Supabase connection required.
+The test suite uses an in-memory SQLite database and FakeRedis by default — **no Supabase or Redis connection required**.
 
-### Local Testing
+### Install test dependencies
 
 ```bash
 pip install -r requirements.txt
+```
+
+### Run all tests
+
+```bash
 python -m pytest -v
 ```
 
-### Docker Testing
+Expected output:
 
-```bash
-docker compose run --rm api pytest -v
+```
+======================== 25 passed ========================
 ```
 
-### Test Coverage
+### Run specific test files
 
-| # | Test Case | File |
-|:-:|-----------|------|
-| 1 | Register + login returns JWT | `test_auth.py` |
-| 2 | Create transaction (authenticated) | `test_transactions.py` |
-| 3 | Get all transactions (own only) | `test_transactions.py` |
-| 4 | Get transaction by ID | `test_transactions.py` |
-| 5 | Update transaction | `test_transactions.py` |
-| 6 | Delete transaction | `test_transactions.py` |
-| 7 | Cannot access another user's transaction (404) | `test_transactions.py` |
-| 8 | Filter by type, category, and amount range | `test_transactions.py` |
+```bash
+# Authentication tests only
+python -m pytest tests/test_auth.py -v
 
-To run against a real PostgreSQL instance:
+# Transaction tests only
+python -m pytest tests/test_transactions.py -v
+```
+
+### Run specific test classes
+
+```bash
+# Create transaction tests
+python -m pytest tests/test_transactions.py::TestCreateTransaction -v
+
+# Get all transactions tests
+python -m pytest tests/test_transactions.py::TestGetTransactions -v
+
+# Get transaction by ID tests
+python -m pytest tests/test_transactions.py::TestGetTransactionById -v
+
+# Update transaction tests
+python -m pytest tests/test_transactions.py::TestUpdateTransaction -v
+
+# Delete transaction tests
+python -m pytest tests/test_transactions.py::TestDeleteTransaction -v
+
+# Filter transaction tests
+python -m pytest tests/test_transactions.py::TestFilterTransactions -v
+```
+
+### Run a single test case
+
+```bash
+python -m pytest tests/test_transactions.py::TestCreateTransaction::test_create_transaction_success -v
+```
+
+### Run with short summary
+
+```bash
+python -m pytest -q
+```
+
+### Run with coverage report (optional)
+
+```bash
+pip install pytest-cov
+python -m pytest -v --cov=app --cov-report=term-missing
+```
+
+### Docker testing
+
+```bash
+# Run all tests inside the API container
+docker compose run --rm api pytest -v
+
+# Run transaction tests only
+docker compose run --rm api pytest tests/test_transactions.py -v
+
+# Run auth tests only
+docker compose run --rm api pytest tests/test_auth.py -v
+```
+
+### Test against PostgreSQL (optional)
 
 ```bash
 TEST_DATABASE_URL=postgresql://user:pass@host:5432/dbname python -m pytest -v
 ```
+
+### Test coverage summary
+
+| # | Test Case | File | Class |
+|:-:|-----------|------|-------|
+| 1 | Register + login returns JWT | `test_auth.py` | — |
+| 2 | Same device returns same token | `test_auth.py` | — |
+| 3 | Refresh token flow | `test_auth.py` | — |
+| 4 | Logout revokes token | `test_auth.py` | — |
+| 5 | Create transaction (POST) | `test_transactions.py` | `TestCreateTransaction` |
+| 6 | Get all transactions (GET list) | `test_transactions.py` | `TestGetTransactions` |
+| 7 | Get transaction by ID (GET) | `test_transactions.py` | `TestGetTransactionById` |
+| 8 | Update transaction (PUT) | `test_transactions.py` | `TestUpdateTransaction` |
+| 9 | Delete transaction (DELETE) | `test_transactions.py` | `TestDeleteTransaction` |
+| 10 | Filter by type/category/amount | `test_transactions.py` | `TestFilterTransactions` |
+
+**Module 24 required tests (10 marks):** Create, Get list, Get by ID, Update — all covered in `tests/test_transactions.py`.
 
 ---
 
