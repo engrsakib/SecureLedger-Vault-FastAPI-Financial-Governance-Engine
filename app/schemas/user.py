@@ -5,31 +5,31 @@ class UserCreate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "username": "john",
-                "email": "john@example.com",
-                "password": "secret123",
+                "username": "engrsakib",
+                "email": "info@engrsakib.com",
+                "password": "1qazxsw2",
             }
         }
     )
 
-    username: str = Field(..., description="Unique username for the account", examples=["john"])
-    email: EmailStr = Field(..., description="Valid email address", examples=["john@example.com"])
-    password: str = Field(..., description="Plain-text password (stored hashed)", examples=["secret123"])
+    username: str = Field(..., description="Unique username for the account", examples=["engrsakib"])
+    email: EmailStr = Field(..., description="Valid email address", examples=["info@engrsakib.com"])
+    password: str = Field(..., description="Plain-text password (stored hashed)", examples=["1qazxsw2"])
 
 
 class UserLogin(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "username": "john",
-                "password": "secret123",
+                "username": "engrsakib",
+                "password": "1qazxsw2",
                 "device_id": "my-laptop-001",
             }
         }
     )
 
-    username: str = Field(..., description="Registered username", examples=["john"])
-    password: str = Field(..., description="Account password", examples=["secret123"])
+    username: str = Field(..., description="Registered username", examples=["engrsakib"])
+    password: str = Field(..., description="Account password", examples=["1qazxsw2"])
     device_id: str | None = Field(
         default=None,
         description="Device identifier. Same device returns the same token session.",
@@ -43,8 +43,8 @@ class UserResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "id": 1,
-                "username": "john",
-                "email": "john@example.com",
+                "username": "engrsakib",
+                "email": "info@engrsakib.com",
             }
         },
     )
